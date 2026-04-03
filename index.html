@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Intranet Corporativa - CPRH</title>
+
+        <link rel="icon" type="image/png" href="imagens/logo_cprh.png">
+
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+        <link rel="stylesheet" href="css/style_Home.css">
+        
+    </head>
+
+    <body class="bg-light">
+
+        <div class="container my-4">
+            <div class="row justify-content-center">
+                <div class="col-lg-10 shadow bg-white rounded-4 border-top-green p-4 h-auto mb-5">
+                    
+                    <header class="text-center mb-4">
+                        <img src="imagens/logo_cprh.png" alt="Logo CPRH" class="mb-3 d-block" style="max-width: 150px; height: auto;">
+                        <img src="imagens/conecta2.png" alt="Logo Conecta" class="mb-3" style="max-width: 400px; height: auto;">
+                        <!-- <h1 class="h3 fw-bold text-success">Central de Informações e Serviços</h1> -->
+                        <p class="text-muted">Selecione uma categoria ou utilize a busca abaixo</p>
+                    </header>
+
+                    <div class="container mt-4 mb-4">
+                        <div class="row justify-content-center">
+                            <div class="col-md-8">
+                                <div class="input-group input-group-lg shadow-sm border rounded-pill overflow-hidden bg-white">
+                                    <span class="input-group-text bg-transparent border-0 text-success ps-4">
+                                        <i class="fas fa-search"></i>
+                                    </span>
+                                    <input type="text" id="busca-input" class="form-control border-0 shadow-none ps-2" 
+                                        placeholder="O que você está procurando?"
+                                        onkeyup="executarBuscaGlobal()">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="lista-documentos" class="container mt-2"></div>
+
+                    <div id="container-botao-fechar" class="container text-center d-none mt-3 mb-5">
+                        <button class="btn btn-light btn-sm px-4 rounded-pill text-muted border shadow-sm" onclick="fecharListaSuave()">
+                            <i class="fas fa-times me-2"></i>Limpar busca e voltar
+                        </button>
+                    </div>
+
+                    <div id="container-principal-menu" class="container transition-all">
+                        </div>
+
+                    <footer class="text-center mt-5 pb-2 text-muted small">
+                        <hr class="w-25 mx-auto mb-3" style="border-top: 2px solid #198754; opacity: 0.2;">
+                        <p class="mb-1">© 2026 - Núcleo de Tecnologia da Informação e Comunicação - CPRH</p>
+                        <p class="fw-bold text-success">Intranet Corporativa</p>
+                    </footer>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- 
+        ===================================================
+                    LOGIN DE ACESSO
+        ===================================================
+        -->
+        <div class="modal fade" id="modalLoginAcesso" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 rounded-4 shadow-lg">
+                    <div class="modal-header bg-success text-white border-0">
+                        <h5 class="modal-title fw-bold"><i class="fas fa-lock me-2"></i>Autenticação de Rede</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="destino-apos-login"> 
+                        
+                        <div class="mb-3">
+                            <label class="small fw-bold text-muted mb-1">Usuário de Rede</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-0"><i class="fas fa-user text-success"></i></span>
+                                <input type="text" id="login-user" class="form-control bg-light border-0" placeholder="ex: joao.silva">
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="small fw-bold text-muted mb-1">Senha Corporativa</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-0"><i class="fas fa-key text-success"></i></span>
+                                <input type="password" id="login-pass" class="form-control bg-light border-0" placeholder="••••••••">
+                            </div>
+                        </div>
+                        <button class="btn btn-success w-100 rounded-pill fw-bold py-2 shadow-sm" id="btn-executar-login" onclick="processarLoginPortal()">
+                            <i class="fas fa-sign-in-alt me-2"></i>Validar e Acessar
+                        </button>
+                        <div class="text-center mt-3">
+                            <small class="text-muted" style="font-size: 0.75rem;">Utilize as mesmas credenciais do seu computador.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!--  
+        ===================================================  
+            FORMULÁRIO PARA ABERTURA DE CHAMADOS DE TI
+        ===================================================
+        -->
+        <div class="modal fade" id="modalTI" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 rounded-4 shadow-lg" id="content-modal-ti"></div>
+            </div>
+        </div>
+
+        <!-- 
+        ===================================================  
+            FORMULÁRIO PARA SOLICITAÇÃO DE VEÍCULOS
+        ===================================================
+        -->
+        <div class="modal fade" id="modalVeiculos" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 rounded-4 shadow-lg" id="content-modal-veiculos"></div>
+            </div>
+        </div>
+
+        <!-- 
+        ===================================================  
+            FORMULÁRIO PARA SOLICITAÇÃO DE DIÁRIAS
+        ===================================================
+        -->
+        <div class="modal fade" id="modalDiarias" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 rounded-4 shadow-lg" id="content-modal-diarias"></div>
+            </div>
+        </div>
+
+        <!-- 
+        ===================================================  
+            FORMULÁRIO DE SOLICITAÇÃO PARA ALMOXARIFADO
+        ===================================================
+        -->
+        <div class="modal fade" id="modalAlmoxarifado" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-0 rounded-4 shadow-lg" id="content-modal-almoxarifado"></div>
+            </div>
+        </div>
+
+        <!-- 
+        ===================================================  
+            FORMULÁRIO DE SOLICITAÇÃO PARA PATRIMÔNIO
+        ===================================================
+        -->
+        <div class="modal fade" id="modalPatrimonio" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 rounded-4 shadow-lg" id="content-modal-patrimonio"></div>
+            </div>
+        </div>
+
+        <!-- 
+        ===================================================  
+            FORMULÁRIO PARA SOLICITAÇÃO DE MANUTENÇÃO
+        ===================================================
+        -->
+        <div class="modal fade" id="modalManutencao" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 rounded-4 shadow-lg" id="content-modal-manutencao"></div>
+            </div>
+        </div>
+
+        <!-- 
+        =============================================
+            BANNER TIPO FLYER PARA AVISOS RÁPIDOS 
+        =============================================
+        -->
+        <div class="modal fade" id="modalAviso" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg"> 
+                <div class="modal-content border-0 rounded-4 overflow-hidden shadow-lg bg-transparent">
+                    <div class="position-relative">
+                        <img src="imagem_avisos/aviso.png" class="img-fluid w-100 d-block rounded-4" alt="Banner Informativo">
+                        <button type="button" class="btn-close position-absolute top-0 end-0 m-3 bg-white p-2 rounded-circle shadow-sm" 
+                                data-bs-dismiss="modal" aria-label="Close" style="z-index: 1055;"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- <footer class="text-center mt-4 mb-5 text-muted small">
+            <hr class="w-25 mx-auto mb-3" style="border-top: 2px solid #198754; opacity: 0.2;">
+            <p class="mb-1">© 2026 - Núcleo de Tecnologia da Informação e Comunicação - CPRH</p>
+            <p class="fw-bold text-success">Intranet Corporativa</p>
+        </footer> -->
+
+        <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+        <script src="js/script_Protocolos.js"></script>
+        <script src="js/script_PortalAcesso.js"></script> 
+
+        <script src="js/script_TI.js"></script>
+        <script src="js/script_Veiculos.js"></script>
+        <script src="js/script_Diarias.js"></script>
+        <script src="js/script_Almoxarifado.js"></script>
+        <script src="js/script_Patrimonio.js"></script>
+        <script src="js/script_Manutencao.js"></script>
+
+        <script src="js/script_Busca.js"></script>
+        <script src="js/script_Home.js"></script>
+
+    </body>
+</html>

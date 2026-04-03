@@ -1,0 +1,307 @@
+/* ==========================================================
+    VARIÁVEIS, BASE E ESTRUTURA (LAYOUT)
+==========================================================
+*/
+:root {
+    --green-dark: #1b4332;
+    --green-main: #2d6a4f;
+    --green-light: #d8f3dc;
+    --accent-green: #74c69d;
+    --bootstrap-green: #198754;
+    --shadow-light: 0 4px 15px rgba(0,0,0,0.05);
+    --transition-std: all 0.3s ease;
+}
+
+body {
+    background: linear-gradient(135deg, #f0f7f4 0%, #d8f3dc 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    color: #333;
+    margin: 0;
+}
+
+.border-top-green {
+    border-top: 6px solid var(--green-main);
+}
+
+/* Container Principal - Caixa Branca */
+.col-lg-10.shadow.bg-white {
+    transition: min-height 0.4s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    min-height: 650px; 
+    border-radius: 1rem;
+}
+
+#container-principal-menu {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 400px; /* Evita o "pulo" visual */
+}
+
+footer {
+    margin-top: auto; 
+    padding: 2rem 0 1rem 0;
+}
+
+/* ==========================================================
+    NÍVEL 1: CARDS DE CATEGORIA (HOME)
+==========================================================
+*/
+.categoria-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.card-categoria {
+    background: #fff;
+    border-radius: 15px;
+    padding: 25px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition-std);
+    border: 2px solid transparent;
+    box-shadow: var(--shadow-light);
+    animation: fadeInCustom 0.5s ease-out;
+}
+
+.card-categoria:hover {
+    transform: translateY(-5px);
+    border-color: var(--bootstrap-green);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.card-categoria i {
+    font-size: 2.5rem;
+    color: var(--bootstrap-green);
+    margin-bottom: 15px;
+    display: block;
+}
+
+.card-categoria h5 {
+    /* font-weight: bold; */
+    margin: 0;
+}
+
+/* ==========================================================
+    NÍVEL 2: BOTÕES DO CARROSSEL (SWIPER)
+==========================================================
+*/
+.btn-float {
+    width: 100%;
+    max-width: 200px;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    transition: var(--transition-std);
+    padding: 15px;
+    margin: 0 auto; /* Centraliza dentro do slide */
+}
+
+/* Garante que o efeito de hover não seja cortado pelo overflow do slide */
+.swiper-slide {
+    display: flex;
+    justify-content: center;
+    padding-top: 10px; 
+}
+
+.btn-float img, .btn-float i {
+    height: 60px;
+    width: 60px;
+    font-size: 50px;
+    margin-bottom: 12px;
+    color: var(--bootstrap-green);
+    object-fit: contain;
+    transition: transform 0.3s ease;
+}
+
+.btn-float span {
+    font-size: 0.9rem;
+    /* font-weight: 700; */
+    color: #333;
+    text-align: center;
+}
+
+.btn-float:hover {
+    transform: translateY(-10px); /* O botão sobe */
+    box-shadow: 0 12px 20px rgba(0,0,0,0.15);
+    border-color: var(--bootstrap-green);
+}
+
+.btn-float:hover img {
+    transform: scale(1.1);
+}
+
+/* =====================================
+        SWIPER E CARROSSEL
+=====================================
+*/
+/* Customização das Setas do Swiper */
+.swiper-container-ajuste {
+    padding: 0 20px;
+    position: relative;
+    margin-top: 20px;
+    overflow: hidden;
+}
+
+.swiper {
+    /* Padding-top generoso para o botão não cortar no hover */
+    /* Padding-bottom para dar espaço às bolinhas */
+    padding: 40px 5px 70px 5px !important; 
+    overflow: visible !important; 
+}
+
+/* Customização das bolinhas (Paginação) */
+.swiper-pagination {
+    bottom: 15px !important; /* Ajuste fino da altura */
+}
+
+.swiper-pagination-bullet {
+    background: #ccc !important;
+    opacity: 0.7;
+    width: 6px !important;  /* Forçando largura fixa para voltarem a ser redondas */
+    height: 6px !important; /* Forçando altura fixa */
+    margin: 0 6px !important;
+    border-radius: 50% !important; /* Garante que sejam círculos perfeitos */
+    transition: all 0.3s ease;
+}
+
+.swiper-pagination-bullet-active {
+    background: #198754 !important; /* Verde CPRH */
+    opacity: 1;
+    transform: scale(1.2); /* Apenas cresce um pouco em vez de alongar */
+}
+
+.swiper-button-next, .swiper-button-prev {
+    background-color: #ffffff;
+    color: var(--bootstrap-green);
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    transition: var(--transition-std);
+    top: 120px !important; 
+    margin-top: 0 !important; /* Remove o ajuste padrão do Swiper */
+    transform: translateY(-50%); /* Centraliza perfeitamente no ponto 110px */
+    z-index: 1000;
+}
+
+.swiper-button-next:after, .swiper-button-prev:after {
+    font-size: 18px;
+    /* font-weight: bold; */
+}
+
+.swiper-button-next:hover, .swiper-button-prev:hover {
+    background-color: var(--bootstrap-green);
+    color: #ffffff !important;
+}
+
+/* ==========================================================
+    TOOLTIP (BALÕES EXPLICATIVOS) - ATUALIZADO
+==========================================================
+*/
+/* Estilização interna do balão */
+.tooltip-inner {
+    max-width: 250px;
+    text-align: center;
+    font-size: 0.8rem;
+    padding: 8px 12px;
+    background-color: var(--green-dark) !important;
+    color: #ffffff !important;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Cor da "setinha" do balão */
+.bs-tooltip-top .tooltip-arrow::before, 
+.bs-tooltip-auto[data-popper-placement^=top] .tooltip-arrow::before {
+    border-top-color: var(--green-dark) !important;
+}
+
+.bs-tooltip-bottom .tooltip-arrow::before, 
+.bs-tooltip-auto[data-popper-placement^=bottom] .tooltip-arrow::before {
+    border-bottom-color: var(--green-dark) !important;
+}
+
+/* Controle de visibilidade e camadas */
+.tooltip {
+    z-index: 10000 !important; /* Acima de modais e carrossel */
+    pointer-events: none !important;
+}
+
+.tooltip.show {
+    opacity: 1 !important; /* Bootstrap controla o fade-in via classe .show */
+}
+
+/* ==========================================================
+    BUSCA E DOCUMENTOS (PDFs)
+==========================================================
+*/
+.pdf-link {
+    padding: 10px 15px;
+    border-radius: 8px;
+    transition: background 0.2s;
+    display: block;
+    text-decoration: none;
+    color: #333;
+}
+
+.pdf-link:hover {
+    background-color: #e9ecef;
+    color: var(--bootstrap-green) !important;
+}
+
+.pdf-link i {
+    font-size: 1.1rem;
+}
+
+/* ==========================================================
+    ANIMAÇÕES E AJUSTES FINAIS
+==========================================================
+*/
+@keyframes fadeInCustom {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate__animated {
+    animation-duration: 0.5s;
+}
+
+/* Botões de Acesso Rápido */
+.btn-atalho-destaque {
+    transition: var(--transition-std);
+}
+
+.btn-atalho-destaque:hover {
+    background-color: #f8fffb;
+    border-color: var(--bootstrap-green) !important;
+}
+
+/* Estilo para links e inputs focados */
+input:focus, button:focus {
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Estado inicial para animação */
+.fade-out {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-in {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
