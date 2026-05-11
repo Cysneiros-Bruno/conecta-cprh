@@ -1,262 +1,260 @@
-/* ==========================================================
-    LÓGICA DE MANUTENÇÃO (PREDIAL / ELÉTRICA / HIDRÁULICA)
-        Integrado com Autenticação Centralizada LDAP
-========================================================== */
+/* ===============================================================
+    LÓGICA DE MANUTENÇÃO (PADRÃO 1-N / MODAL BASE)
+    FRONTEND: Roda no navegador. Coleta os dados e envia para o Node.js.
+    VERSÃO MODULARIZADA ES6
+   =============================================================== */
 
-/**
- * Função chamada pelo clique no carrossel.
- * Agora utiliza o interceptor de segurança global.
- */
+// 1. IMPORTAÇÃO DO MOTOR DE API PÚBLICO
+import { fetchPublico } from './services/apiService.js';
+
+// Variável global (protegida na bolha) para armazenar os itens temporários antes do envio
+let itensManutencaoTemp = [];
+
 function iniciarFluxoManutencao() {
-    // Chama a função global de script_PortalAcesso.js
-    // 'Manutencao' deve ser exatamente o nome tratado no switch do abridor
-    if (typeof solicitarAcesso === "function") {
-        solicitarAcesso('Manutencao');
+    // Chamada segura através do objeto window para funções de outros módulos
+    if (typeof window.solicitarAcesso === "function") {
+        window.solicitarAcesso('Manutencao');
     } else {
         console.error("Erro: script_PortalAcesso.js não carregado.");
     }
 }
 
-/**
- * Monta a estrutura do Modal de Manutenção com dados do LDAP
- * @param {Object} dadosUsuario - Contém {nome, email}
- */
+// Monta a interface idêntica à do Almoxarifado, focada em adicionar múltiplos itens
 function montarModalManutencao(dadosUsuario) {
-    const container = document.getElementById('content-modal-manutencao');
+    const container = document.getElementById('conteudo-modal-base');
     if (!container) return;
 
-    const nomeServidor = dadosUsuario.nome || "";
-    const emailServidor = dadosUsuario.email || "";
+    itensManutencaoTemp = []; // Reseta a lista sempre que o modal abrir
 
     container.innerHTML = `
         <div class="modal-header border-0 pb-0">
             <h5 class="modal-title fw-bold text-success">
                 <i class="fas fa-screwdriver-wrench me-2"></i>Abertura de Chamado - Manutenção
             </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
+            
             <form id="form-manutencao">
                 <div class="bg-light p-3 rounded-3 mb-4 border shadow-sm">
-                    <h6 class="text-success fw-bold mb-3 small text-uppercase border-bottom pb-2">
-                        <i class="fas fa-user-shield me-2"></i>Identificação Validada
-                    </h6>
                     <div class="row g-2">
                         <div class="col-md-7">
-                            <label class="small text-muted fw-bold">Nome do Solicitante</label>
-                            <input type="text" id="manut-nome" class="form-control form-control-sm bg-white fw-bold" 
-                                   value="${nomeServidor}" readonly>
+                            <label class="small text-muted fw-bold">Solicitante</label>
+                            <input type="text" id="nome_solicitante" class="form-control form-control-sm bg-white fw-bold" value="${dadosUsuario.nome}" readonly>
                         </div>
                         <div class="col-md-5">
                             <label class="small text-muted fw-bold">E-mail Corporativo</label>
-                            <input type="text" id="manut-email" class="form-control form-control-sm bg-white fw-bold" 
-                                   value="${emailServidor}" readonly>
+                            <input type="email" id="email_solicitante" class="form-control form-control-sm bg-white fw-bold" value="${dadosUsuario.email}" readonly>
                         </div>
-                        <div class="col-md-12">
+                        <div class="col-12 mt-1">
                             <label class="small text-muted fw-bold">Setor / Localização Exata *</label>
-                            <input type="text" id="manut-local" class="form-control form-control-sm" 
-                                   placeholder="Ex: Bloco A - Sala 04 (Protocolo)" required>
+                            <select id="localizacao_manut" class="form-select form-select-sm shadow-sm border-success" onchange="validarEnvioManut()" required></select>
                         </div>
                     </div>
                 </div>
 
                 <div class="px-2">
-                    <h6 class="text-success fw-bold mb-3 small text-uppercase border-bottom pb-2">
-                        <i class="fas fa-clipboard-list me-2"></i>Detalhes da Ocorrência
-                    </h6>
-                    <div class="row g-3">
-                        <div class="col-md-12">
-                            <label class="small text-muted fw-bold">Tipo de Reparo *</label>
-                            <select class="form-select form-select-sm border-0 bg-light rounded-3" id="manut-tipo" required>
-                                <option value="" selected disabled>Selecione uma categoria...</option>
-                                <option value="Ar-condicionado">Ar-condicionado</option>
-                                <option value="Elétrica">Elétrica (Lâmpadas/Tomadas)</option>
-                                <option value="Hidráulica">Hidráulica (Vazamentos/Banheiros)</option>
-                                <option value="Civil">Civil (Pintura/Portas/Chaves)</option>
-                                <option value="Mobiliário">Mobiliário (Cadeiras/Mesas)</option>
-                                <option value="Outros">Outros</option>
-                            </select>
-                        </div>
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                        <h6 class="fw-bold text-dark mb-0"><i class="fas fa-tools me-2 text-warning"></i>Adicionar Reparos</h6>
+                        <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="addLinhaManut()">
+                            <i class="fas fa-plus me-1"></i> Adicionar Reparo
+                        </button>
+                    </div>
 
-                        <div class="col-md-12">
-                            <label class="small text-muted fw-bold">Descrição do Problema *</label>
-                            <textarea class="form-control form-control-sm border-0 bg-light rounded-3" 
-                                      id="manut-descricao" rows="4" 
-                                      placeholder="Descreva detalhadamente o defeito ou solicitação..." required></textarea>
-                        </div>
-
-                        <div class="col-md-12 mt-3">
-                            <label class="small text-muted fw-bold mb-2 d-block">
-                                <i class="fas fa-camera me-1 text-success"></i> Anexar foto do problema (Opcional)
-                            </label>
-                            
-                            <div class="input-group mb-2 shadow-sm">
-                                <input type="text" id="manut-nome-arquivo" 
-                                    class="form-control form-control-sm border-0 bg-light" 
-                                    placeholder="Nenhum arquivo selecionado" readonly style="font-size: 0.8rem;">
-                                
-                                <button class="btn btn-light border-0 text-danger d-none" type="button" id="btn-remover-arquivo" 
-                                        onclick="removerArquivoManutencao()" title="Remover arquivo">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
-                            </div>
-
-                            <div class="d-flex align-items-center gap-3">
-                                <label for="manut-imagem" class="btn btn-success btn-sm rounded-pill px-4 fw-bold shadow-sm mb-0" style="cursor: pointer;">
-                                    <i class="fas fa-upload me-2"></i>Escolher Arquivo
-                                </label>
-                                <input type="file" id="manut-imagem" accept=".jpg, .jpeg, .png" 
-                                       onchange="validarArquivoManutencao(this)" class="d-none">
-
-                                <div class="d-flex flex-column justify-content-center" style="line-height: 1.2;">
-                                    <span class="text-success fw-bold" style="font-size: 0.7rem;">Formatos: .jpg, .jpeg, .png</span>
-                                    <span class="text-muted" style="font-size: 0.65rem;">Máx 300 Kb</span>
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-body p-2 bg-light rounded-3 border">
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <label class="small text-muted fw-bold d-block mb-1">Categoria *</label>
+                                    <select id="tipo_manut" class="form-select form-select-sm">
+                                        <option value="" disabled selected>Selecione...</option>
+                                        <option value="Ar-condicionado">Ar-condicionado</option>
+                                        <option value="Civil">Civil (Pintura/Portas/Chaves)</option>
+                                        <option value="Elétrica">Elétrica (Lâmpadas/Tomadas)</option>
+                                        <option value="Hidráulica">Hidráulica (Vazamento/Banheiros)</option>
+                                        <option value="Mobiliário">Mobiliário (Cadeiras/Mesas)</option>
+                                        <option value="Outros">Outros</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="small text-muted fw-bold d-block mb-1">Descrição do Defeito *</label>
+                                    <input type="text" id="desc_manut" class="form-control form-control-sm" placeholder="Ex: Lâmpada piscando e porta rangendo">
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    <div class="table-responsive bg-white rounded-3 shadow-sm border" style="min-height: 120px;">
+                        <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 30%;">Tipo</th>
+                                    <th>Descrição do Defeito</th>
+                                    <th class="text-center" style="width: 50px;">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-itens-manut">
+                                <tr><td colspan="3" class="text-center text-muted py-4">Nenhum reparo adicionado ainda.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </form>
         </div>
-
-        <div class="modal-footer border-0 d-none p-0 mt-4" id="container-footer-manut">
-            <div class="d-flex flex-column w-100 px-3 pb-4">
-                <div class="w-100 mb-3">
-                    <label class="form-label small fw-bold text-muted">Status</label>
-                    <input type="text" id="manut-status-footer" class="form-control border-success bg-light fw-bold text-success shadow-none" readonly>
-                </div>
-                <div class="d-flex justify-content-end gap-2">
-                    <button type="button" id="btn-manut-corrigir" class="btn btn-danger px-4 rounded-pill fw-bold d-none" onclick="limparFormularioManutencao()">
-                        <i class="fas fa-eraser me-2"></i>Limpar
-                    </button>
-                    <button type="button" id="btn-manut-enviar" class="btn btn-success px-4 rounded-pill fw-bold d-none" onclick="enviarChamadoManutencao()">
-                        <i class="fas fa-paper-plane me-2"></i>Enviar Chamado
-                    </button>
-                </div>
+        
+        <div class="modal-footer border-0 p-0 mt-2 px-3 pb-4">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <span id="manut-status-texto" class="small fw-bold text-danger">Aguardando reparos...</span>
+                <button type="button" id="btn-enviar-manut" class="btn btn-success px-4 rounded-pill fw-bold disabled shadow-sm" onclick="enviarManutencao()">
+                    <i class="fas fa-paper-plane me-2"></i>Enviar Chamado
+                </button>
             </div>
         </div>
     `;
 
-    // Reatribui o ouvinte de entrada para validação
-    document.getElementById('form-manutencao').addEventListener('input', validarManutencao);
+    // Busca setores ativos (via script utilitário exportado globalmente)
+    if (typeof window.popularSelectSetores === 'function') window.popularSelectSetores('localizacao_manut');
 }
 
-/* --- FUNÇÕES DE APOIO --- */
-
-function validarArquivoManutencao(input) {
-    const campoNome = document.getElementById('manut-nome-arquivo');
-    const btnLixeira = document.getElementById('btn-remover-arquivo');
-    const arquivo = input.files[0];
+function addLinhaManut() {
+    const tipo = document.getElementById('tipo_manut').value;
+    const desc = document.getElementById('desc_manut').value.trim();
     
-    if (!arquivo) return removerArquivoManutencao();
-
-    const extensaoOk = ['image/jpeg', 'image/jpg', 'image/png'].includes(arquivo.type);
-    const tamanhoOk = arquivo.size <= 300 * 1024; 
-
-    if (btnLixeira) btnLixeira.classList.remove('d-none');
-
-    if (!extensaoOk || !tamanhoOk) {
-        campoNome.value = "Arquivo inválido ou muito grande!";
-        campoNome.classList.add('text-danger', 'border', 'border-danger');
-        input.value = ""; 
-    } else {
-        campoNome.classList.remove('text-danger', 'border', 'border-danger');
-        campoNome.classList.add('text-success', 'fw-bold');
-        campoNome.value = arquivo.name;
+    if (!tipo || !desc) {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'Preencha a Categoria e a Descrição!', showConfirmButton: false, timer: 2000 });
+        return;
     }
-    validarManutencao();
-}
 
-function removerArquivoManutencao() {
-    const input = document.getElementById('manut-imagem');
-    const campoNome = document.getElementById('manut-nome-arquivo');
-    if (input) input.value = "";
-    if (campoNome) {
-        campoNome.value = "";
-        campoNome.classList.remove('text-success', 'text-danger', 'fw-bold', 'border-danger');
-    }
-    document.getElementById('btn-remover-arquivo')?.classList.add('d-none');
-    validarManutencao();
-}
-
-function validarManutencao() {
-    const ids = ['manut-local', 'manut-tipo', 'manut-descricao'];
-    const campos = ids.map(id => document.getElementById(id));
-    const footer = document.getElementById('container-footer-manut');
-    const campoStatus = document.getElementById('manut-status-footer');
-
-    const algumPreenchido = campos.some(c => c && c.value.trim() !== "");
-    footer.classList.toggle('d-none', !algumPreenchido);
+    itensManutencaoTemp.push({ tipo: tipo, descricao: desc });
     
-    const todosPreenchidos = campos.every(c => c && c.value.trim() !== "");
+    document.getElementById('tipo_manut').value = '';
+    document.getElementById('desc_manut').value = '';
+    document.getElementById('desc_manut').focus();
+    
+    renderizarTabelaManut();
+    validarEnvioManut();
+}
 
-    if (!todosPreenchidos) {
-        campoStatus.value = "Aguardando preenchimento obrigatório...";
-        campoStatus.classList.remove('text-success');
-        campoStatus.classList.add('text-danger');
-        toggleBotoesManut(false);
+function renderizarTabelaManut() {
+    const corpo = document.getElementById('tabela-itens-manut');
+    
+    if (itensManutencaoTemp.length === 0) {
+        corpo.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">Nenhum reparo adicionado ainda.</td></tr>';
+        return;
+    }
+
+    corpo.innerHTML = itensManutencaoTemp.map((it, index) => `
+        <tr>
+            <td class="fw-bold"><span class="badge bg-secondary">${it.tipo}</span></td>
+            <td class="text-wrap">${it.descricao}</td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm text-danger p-0 border-0 shadow-none" onclick="removerItemManut(${index})">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function removerItemManut(index) {
+    itensManutencaoTemp.splice(index, 1);
+    renderizarTabelaManut();
+    validarEnvioManut();
+}
+
+function validarEnvioManut() {
+    const setorElement = document.getElementById('localizacao_manut');
+    const btn = document.getElementById('btn-enviar-manut');
+    const status = document.getElementById('manut-status-texto');
+    
+    if (!setorElement || !btn || !status) return;
+
+    const setor = setorElement.value;
+    const total = itensManutencaoTemp.length;
+
+    if (!setor || setor === "") {
+        status.textContent = "Selecione a localização exata.";
+        status.className = "small fw-bold text-danger";
+        btn.classList.add('disabled');
+        btn.disabled = true; 
+    } else if (total === 0) {
+        status.textContent = "Adicione ao menos um reparo.";
+        status.className = "small fw-bold text-danger";
+        btn.classList.add('disabled');
+        btn.disabled = true; 
     } else {
-        campoStatus.value = "PRONTO PARA ENVIAR";
-        campoStatus.classList.remove('text-danger');
-        campoStatus.classList.add('text-success');
-        toggleBotoesManut(true);
+        status.textContent = `${total} reparo(s) pronto(s).`;
+        status.className = "small fw-bold text-success";
+        btn.classList.remove('disabled');
+        btn.disabled = false; 
     }
 }
 
-function toggleBotoesManut(valido) {
-    document.getElementById('btn-manut-enviar').classList.toggle('d-none', !valido);
-    document.getElementById('btn-manut-corrigir').classList.toggle('d-none', valido);
-}
+async function enviarManutencao() {
+    const local = document.getElementById('localizacao_manut').value;
+    
+    if (!local || local === "") {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'Selecione o Setor/Localização!', showConfirmButton: false, timer: 2500 });
+        return; 
+    }
 
-function limparFormularioManutencao() {
-    document.getElementById('form-manutencao').reset();
-    removerArquivoManutencao();
-    document.getElementById('container-footer-manut').classList.add('d-none');
-}
+    if (itensManutencaoTemp.length === 0) {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'Adicione ao menos um reparo!', showConfirmButton: false, timer: 2500 });
+        return; 
+    }
 
-/*
-=============================================================
-    Envio final da solicitação com protocolo sequencial
-=============================================================
- */
-function enviarChamadoManutencao() {
-    // CHAMA O GERADOR CENTRALIZADO (Padrão: MANUT-2026.000001)
-    const protocoloManut = GeradorProtocolo.gerar('MANUTENCAO');
-
-    // COLETA OS DADOS (Útil para o console ou futura integração com banco)
-    const dados = {
-        nome: document.getElementById('manut-nome').value,
-        email: document.getElementById('manut-email').value,
-        local: document.getElementById('manut-local').value,
-        tipo: document.getElementById('manut-tipo').value,
-        descricao: document.getElementById('manut-descricao').value,
-        protocolo: protocoloManut
+    const dadosForm = {
+        nome: document.getElementById('nome_solicitante').value,
+        email: document.getElementById('email_solicitante').value,
+        local: local,
+        itens: itensManutencaoTemp 
     };
 
-    console.log("Enviando chamado de manutenção:", dados);
+    const btn = document.getElementById('btn-enviar-manut');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando...';
+    btn.disabled = true;
 
-    // SELECIONA O CONTAINER DO MODAL
-    const container = document.getElementById('content-modal-manutencao');
-    if (!container) return;
+    try {
+        // CORREÇÃO: Utilização do fetchPublico e remoção do IP direto
+        const data = await fetchPublico('/manutencao', {
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dadosForm)
+        });
 
-    // RENDERIZA A TELA DE SUCESSO PADRONIZADA (Identidade Visual CPRH)
-    container.innerHTML = `
-        <div class="modal-body text-center py-5 animate__animated animate__fadeIn">
-            <i class="fas fa-screwdriver-wrench text-success mb-4" style="font-size: 5rem;"></i>
-            
-            <h4 class="fw-bold text-dark">Solicitação Enviada!</h4>
-            <p class="text-muted px-4 small">
-                A equipe de manutenção da CPRH foi notificada e analisará o seu chamado em breve.
-            </p>
-            
-            <div class="bg-light mx-auto p-3 rounded-4 border shadow-sm mb-4" style="max-width: 300px;">
-                <small class="text-muted d-block fw-bold" style="letter-spacing: 1px; font-size: 0.7rem;">PROTOCOLO</small>
-                <span class="fw-bold text-success" style="font-size: 1.5rem;">${dados.protocolo}</span>
-            </div>
-            
-            <button type="button" class="btn btn-success rounded-pill px-5 fw-bold shadow-sm" data-bs-dismiss="modal">
-                Finalizar
-            </button>
-        </div>
-    `;
+        if (data.success) {
+            const container = document.getElementById('conteudo-modal-base');
+            container.innerHTML = `
+                <div class="modal-body text-center py-5 animate__animated animate__fadeIn">
+                    <i class="fas fa-check-circle text-success mb-4" style="font-size: 5rem;"></i>
+                    <h4 class="fw-bold">Solicitação Realizada!</h4>                    
+                    <div class="bg-light p-3 rounded-4 border my-4 mx-auto" style="max-width: 300px;">
+                        <small class="text-muted d-block fw-bold">PROTOCOLO</small>
+                        <span class="fw-bold text-success" style="font-size: 1.5rem;">${data.protocolo}</span>
+                    </div>
+                    <p class="text-muted small mb-4">Um e-mail de confirmação foi enviado para o Setor Responsável</p>
+                    <button type="button" class="btn btn-success rounded-pill px-5" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            `;
+        } else {
+            Swal.fire('Erro', 'Falha ao gravar no banco: ' + data.message, 'error');
+            btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Enviar Chamado';
+            btn.disabled = false;
+        }
+    } catch (error) {
+        console.error("Erro na integração:", error);
+        Swal.fire('Erro', 'Não foi possível conectar ao servidor.', 'error');
+        btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Enviar Chamado';
+        btn.disabled = false;
+    }
 }
+
+// =========================================================================
+// EXPORTANDO AS FUNÇÕES PARA O HTML (Furar a bolha do ES6 Module)
+// =========================================================================
+window.iniciarFluxoManutencao = iniciarFluxoManutencao;
+window.montarModalManutencao = montarModalManutencao;
+window.addLinhaManut = addLinhaManut;
+window.removerItemManut = removerItemManut;
+window.validarEnvioManut = validarEnvioManut;
+window.enviarManutencao = enviarManutencao;

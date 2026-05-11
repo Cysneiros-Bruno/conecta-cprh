@@ -1,6 +1,6 @@
 /*
 ================================================
-    BANCO DE DADOS PARA PESQUISA NA INTRANET
+    BANCO DE DADOS PARA PESQUISA NA INTRANET (ES6)
 ================================================
  */
 const BASE_DOCUMENTOS = [
@@ -18,15 +18,16 @@ const BASE_DOCUMENTOS = [
     { nome: "Suporte TI (WhatsApp)", categoria: "Sistemas Internos", link: "#", modal: "modalTI", funcao: "montarModalTI", chaves: "ajuda computador impressora chamado" },
     { nome: "Solicitação de Veículos", categoria: "Sistemas Internos", link: "#", modal: "modalVeiculos", funcao: "montarModalVeiculos", chaves: "carro viagem transporte motorista" },
     { nome: "Solicitação Almoxarifado", categoria: "Sistemas Internos", link: "#", modal: "modalAlmoxarifado", funcao: "montarModalAlmoxarifado", chaves: "almoxarifado almox material escritorio" },
+    { nome: "Controle de Patrimônio", categoria: "Sistemas Internos", link: "#", modal: "modalPatrimonio", funcao: "montarModalPatrimonio", chaves: "patrimonio controle ativo bens" },
     { nome: "Solicitação de Manutenção", categoria: "Sistemas Internos", link: "#", modal: "modalManutencao", funcao: "montarModalManutencao", chaves: "ar-condicionado eletrica hidraulica lampadas manutencao" },
 
     // --- LEGISLAÇÃO E DOCUMENTOS (CHAMAM PDFs LOCAIS) ---
-    { nome: "I.S. 06/2024 - Estabelece os procedimentos e os critérios para pagamento em ordem cronológica", categoria: "Legislação", link: "instrucoes_servicos/is_06-2024.pdf", chaves: "is instrucao servico pagamento financeiro contas" },
-    { nome: "I.S. 05/2024 - Estabelece as orientações e procedimentos referentes ao Controle de Frequência", categoria: "Legislação", link: "instrucoes_servicos/is_05-2024.pdf", chaves: "is instrucao servico controle procedimentos ponto horario frequencia" },
-    { nome: "I.S. 04/2024 - Estabelece procedimentos para Gestão e Fiscalização de Contratos e Convênios", categoria: "Legislação", link: "instrucoes_servicos/is_04-2024.pdf", chaves: "is instrucao servico fiscalizacao gestao contratos convenios" },
-    { nome: "I.S. 03/2024 - Disciplina as regras, procedimentos e rotinas do Controle de Frequência", categoria: "Legislação", link: "instrucoes_servicos/is_03-2024.pdf", chaves: "is instrucao servico regras procedimentos rotinas controle frequencia" },
-    { nome: "I.S. 02/2024 - Disciplina as regras e rotinas à Área de Tecnologia da Informação", categoria: "Legislação", link: "instrucoes_servicos/is_02-2024.pdf", chaves: "is instrucao servico regras rotinas ti tecnologia informacao" },
-    { nome: "I.S. 01/2024 - Estabelece orientações de manutenção dos Termos de Compromissos no SILIA", categoria: "Legislação", link: "instrucoes_servicos/is_01-2024.pdf", chaves: "is instrucao servico orientacoes manutencao termos compromissos silia" },
+    { nome: "I.S. 06/2024 - Estabelece os procedimentos e os critérios para pagamento", categoria: "Legislação", link: "instrucoes_servicos/is_06-2024.pdf", chaves: "is instrucao servico pagamento financeiro contas" },
+    { nome: "I.S. 05/2024 - Estabelece as orientações referentes ao Controle de Frequência", categoria: "Legislação", link: "instrucoes_servicos/is_05-2024.pdf", chaves: "is instrucao controle procedimentos ponto horario frequencia" },
+    { nome: "I.S. 04/2024 - Estabelece procedimentos para Gestão de Contratos e Convênios", categoria: "Legislação", link: "instrucoes_servicos/is_04-2024.pdf", chaves: "is instrucao servico fiscalizacao gestao contratos convenios" },
+    { nome: "I.S. 03/2024 - Disciplina as regras do Controle de Frequência", categoria: "Legislação", link: "instrucoes_servicos/is_03-2024.pdf", chaves: "is instrucao servico regras procedimentos rotinas controle frequencia" },
+    { nome: "I.S. 02/2024 - Disciplina as regras à Área de Tecnologia da Informação", categoria: "Legislação", link: "instrucoes_servicos/is_02-2024.pdf", chaves: "is instrucao servico regras rotinas ti tecnologia informacao" },
+    { nome: "I.S. 01/2024 - Estabelece orientações de manutenção dos Termos de Compromissos", categoria: "Legislação", link: "instrucoes_servicos/is_01-2024.pdf", chaves: "is instrucao servico orientacoes manutencao termos compromissos silia" },
     { nome: "I.S. 01/2019 - Estabelece a contagem de prazos em dias úteis", categoria: "Legislação", link: "instrucoes_servicos/is_01-2019.pdf", chaves: "is contagem prazo dias uteis" }
 ];
 
@@ -43,11 +44,7 @@ function executarBuscaGlobal() {
 
     if (!input || !containerLista) return;
 
-    const termo = input.value
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, "")
-        .trim();
+    const termo = input.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").trim();
 
     if (termo.length < 2) {
         containerLista.innerHTML = "";
@@ -75,17 +72,15 @@ function executarBuscaGlobal() {
     if (resultados.length > 0) {
         containerLista.innerHTML = resultados.map(item => {
             const ehModal = !!item.modal;
-            
-            // --- NOVA LÓGICA DE FORMATAÇÃO ---
-            // Aplica negrito apenas no prefixo I.S. até o hífen
             const nomeExibicao = item.nome.replace(/^(I\.S\..*?-)/, '<strong>$1</strong>');
             
+            // CORREÇÃO CRÍTICA: Adicionado o prefixo window. nas chamadas dinâmicas
             const acao = ehModal 
-                ? `onclick="if(typeof ${item.funcao} === 'function') { ${item.funcao}(); } fecharListaSuave();" 
+                ? `onclick="if(typeof window.${item.funcao} === 'function') { window.${item.funcao}(); } window.fecharListaSuave();" 
                    data-bs-toggle="modal" 
                    data-bs-target="#${item.modal}" 
                    href="javascript:void(0)"` 
-                : `href="${item.link}" target="_blank" onclick="fecharListaSuave()"`;
+                : `href="${item.link}" target="_blank" onclick="window.fecharListaSuave()"`;
 
             return `
                 <div class="card mb-2 shadow-sm border-0 animate__animated animate__fadeInUp">
@@ -108,11 +103,6 @@ function executarBuscaGlobal() {
     }
 }
 
-/*
-========================
-    LIMPEZA DA BUSCA
-========================
- */
 function fecharListaSuave() {
     const input = document.getElementById('busca-input');
     const containerLista = document.getElementById('lista-documentos');
@@ -126,4 +116,16 @@ function fecharListaSuave() {
         containerMenu.style.pointerEvents = "auto";
     }
     if (botaoFechar) botaoFechar.classList.add('d-none');
+}
+
+// =========================================================================
+// CONEXÃO COM O HTML (MÓDULO ES6) E OUVINTE NATIVO
+// =========================================================================
+window.executarBuscaGlobal = executarBuscaGlobal;
+window.fecharListaSuave = fecharListaSuave;
+
+// Aqui substituímos o "onkeyup" antigo do HTML!
+const inputBusca = document.getElementById('busca-input');
+if (inputBusca) {
+    inputBusca.addEventListener('keyup', executarBuscaGlobal);
 }

@@ -305,3 +305,31 @@ input:focus, button:focus {
     transform: translateY(0);
     transition: opacity 0.4s ease, transform 0.4s ease;
 }
+
+/* Efeito de Hover (Elevação) para os Cards do Admin */
+.hover-zoom {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-zoom:hover {
+    transform: translateY(-5px); /* Faz o card "subir" levemente */
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15) !important; /* Aumenta a sombra */
+}
+
+/* ==========================================================
+   CORREÇÃO DO INPUT NUMBER (ALMOXARIFADO E OUTROS)
+   Remove as setinhas nativas dos navegadores e recupera o espaço
+========================================================== */
+
+/* Chrome, Safari, Edge, Opera */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Firefox */
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}

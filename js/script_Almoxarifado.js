@@ -1,271 +1,375 @@
 /* ==========================================================
-    LÓGICA DE ALMOXARIFADO (SOLICITAÇÃO DE MATERIAIS)
-    Integrado com Autenticação Centralizada LDAP
-========================================================== 
+    LÓGICA DE ALMOXARIFADO (VERSÃO FINAL 100% MODULAR)
+   ========================================================== 
 */
 
-/**
- * Ponto de entrada chamado pelo carrossel
- */
+import { fetchPublico } from './services/apiService.js';
+
+let contadorItensAlmox = 0; 
+let catalogoMateriaisMemoria = []; 
+let categoriasDisponiveis = [];
+const LIMITE_MAXIMO_ITENS = 10;
+
 function iniciarFluxoAlmoxarifado() {
-    if (typeof solicitarAcesso === "function") {
-        solicitarAcesso('Almoxarifado'); // Chama a portaria global
-    } else {
-        console.error("Erro: script_PortalAcesso.js não carregado.");
+    if (typeof window.solicitarAcesso === "function") {
+        window.solicitarAcesso('Almoxarifado'); 
     }
 }
 
-let contadorItensAlmox = 0; 
-
-/**
- * Monta o Modal de Almoxarifado com dados validados
- * @param {Object} dadosUsuario - Contém {nome, email}
- */
 function montarModalAlmoxarifado(dadosUsuario) {
-    const container = document.getElementById('content-modal-almoxarifado');
+    const container = document.getElementById('conteudo-modal-base');
     if (!container) return;
 
     contadorItensAlmox = 0; 
-    const nomeServidor = dadosUsuario.nome || "";
-    const emailServidor = dadosUsuario.email || "";
 
     container.innerHTML = `
         <div class="modal-header border-0 pb-0">
-            <h5 class="modal-title fw-bold text-success">
-                <i class="fas fa-boxes me-2"></i>Requisição de Material
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <h5 class="modal-title fw-bold text-success"><i class="fas fa-boxes me-2"></i>Requisição de Material</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
             <form id="form-almoxarifado">
                 
                 <div class="bg-light p-3 rounded-3 mb-4 border shadow-sm">
-                    <h6 class="text-success fw-bold mb-3 small text-uppercase border-bottom pb-2">
-                        <i class="fas fa-user-shield me-2"></i>Identificação Validada
-                    </h6>
                     <div class="row g-2">
                         <div class="col-md-7">
                             <label class="small text-muted fw-bold">Solicitante</label>
-                            <input type="text" id="almox-nome" class="form-control form-control-sm bg-white fw-bold" 
-                                   value="${nomeServidor}" readonly>
+                            <input type="text" id="almox-nome" class="form-control form-control-sm bg-white fw-bold" value="${dadosUsuario.nome}" readonly>
                         </div>
                         <div class="col-md-5">
                             <label class="small text-muted fw-bold">E-mail Corporativo</label>
-                            <input type="email" id="almox-email" class="form-control form-control-sm bg-white fw-bold" 
-                                   value="${emailServidor}" readonly>
+                            <input type="email" id="almox-email" class="form-control form-control-sm bg-white fw-bold" value="${dadosUsuario.email}" readonly>
                         </div>
                         <div class="col-12 mt-1">
                             <label class="small text-muted fw-bold">Setor / Unidade *</label>
-                            <input type="text" id="almox-unidade" class="form-control form-control-sm shadow-sm" 
-                                   placeholder="Informe sua unidade de trabalho" required oninput="validarAlmoxarifado()">
+                            <select id="almox-unidade" class="form-select form-select-sm shadow-sm" required></select>
                         </div>
                     </div>
                 </div>
 
                 <div class="px-2">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-                        <h6 class="text-success fw-bold mb-0 small text-uppercase">
-                            <i class="fas fa-list-ol me-2"></i>Itens Solicitados
-                        </h6>
-                        <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="adicionarLinhaAlmox()">
+                        <h6 class="fw-bold text-dark mb-0"><i class="fas fa-box-open me-2 text-success"></i>Itens Solicitados</h6>
+                        
+                        <button type="button" id="btn-almox-add" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="adicionarLinhaAlmox()">
                             <i class="fas fa-plus me-1"></i> Adicionar Item
                         </button>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle border-0">
+                    
+                    <div class="table-responsive" style="min-height: 150px; overflow-y: visible;">
+                        <table class="table table-sm align-middle border-0" id="tabela-itens-almox">
                             <thead>
                                 <tr class="text-muted small">
                                     <th style="width: 5%">#</th>
-                                    <th style="width: 70%">Descrição do Material</th>
-                                    <th style="width: 15%">Qtd.</th>
-                                    <th style="width: 10%" class="text-center">Ação</th>
+                                    <th style="width: 18%">Categoria</th>
+                                    <th style="width: 12%">Código</th>
+                                    <th style="width: 45%">Material Selecionado</th>
+                                    <th style="width: 12%">Qtd.</th>
+                                    <th style="width: 8%" class="text-center">Ação</th>
                                 </tr>
                             </thead>
-                            <tbody id="tbody-almox"></tbody>
+                            <tbody id="tbody-almox">
+                            </tbody>
                         </table>
                     </div>
                 </div>
             </form>
         </div>
 
-        <div class="modal-footer border-0 d-none p-0 mt-4" id="container-footer-almox">
-            <div class="d-flex flex-column w-100">
-                <div class="w-100 mb-3 text-start px-3">
-                    <label class="form-label small fw-bold text-muted">Status / Itens Totais</label>
-                    <input type="text" id="almox-status-footer" class="form-control border-success bg-light fw-bold text-success shadow-none" readonly>
-                </div>
-                <div class="d-flex justify-content-end w-100 gap-2 pb-4 px-3">
-                    <button type="button" id="btn-almox-corrigir" class="btn btn-danger px-4 rounded-pill fw-bold" onclick="limparFormularioAlmoxarifado()">
-                        <i class="fas fa-eraser me-2"></i>Limpar
-                    </button>
-                    <button type="button" id="btn-almox-enviar" class="btn btn-success px-4 rounded-pill fw-bold" onclick="enviarSolicitacaoAlmoxarifado()">
-                        <i class="fas fa-paper-plane me-2"></i>Enviar Requisição
-                    </button>
-                </div>
+        <div class="modal-footer border-0 p-0 mt-2 px-3 pb-4">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <span id="almox-status-texto" class="small fw-bold text-danger">Carregando catálogo...</span>
+                <button type="button" id="btn-almox-enviar" class="btn btn-success px-4 rounded-pill fw-bold disabled" onclick="enviarSolicitacaoAlmoxarifado()">
+                    <i class="fas fa-paper-plane me-2"></i>Enviar Requisição
+                </button>
             </div>
         </div>
     `;
 
-    // Inicia com uma linha vazia
-    adicionarLinhaAlmox();
+    if (typeof window.popularSelectSetores === 'function') window.popularSelectSetores('almox-unidade');
     
-    // Ativa o ouvinte de entrada
+    carregarCatalogoAlmox().then(() => {
+        adicionarLinhaAlmox();
+    });
+    
     document.getElementById('form-almoxarifado').addEventListener('input', validarAlmoxarifado);
+    document.getElementById('form-almoxarifado').addEventListener('change', validarAlmoxarifado);
+}
+
+async function carregarCatalogoAlmox() {
+    try {
+        const data = await fetchPublico('/materiais');
+        // CORRIGIDO: Removemos o "await response.json()" que estava a causar o erro
+        catalogoMateriaisMemoria = Array.isArray(data) ? data : [];
+        
+        const setCategorias = new Set(catalogoMateriaisMemoria.map(item => item.categoria || 'Uso Geral'));
+        categoriasDisponiveis = Array.from(setCategorias).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    } catch (error) {
+        console.error('Erro ao carregar o catálogo:', error);
+    }
 }
 
 function adicionarLinhaAlmox() {
-    contadorItensAlmox++;
     const tbody = document.getElementById('tbody-almox');
-    if (!tbody) return;
+    const btnAdd = document.getElementById('btn-almox-add');
+    const qtdAtual = tbody.querySelectorAll('tr').length;
+    
+    if (qtdAtual >= LIMITE_MAXIMO_ITENS) return; 
 
+    contadorItensAlmox++;
+    const idLinha = `linha-almox-${contadorItensAlmox}`;
     const tr = document.createElement('tr');
-    tr.id = `linha-almox-${contadorItensAlmox}`;
+    tr.id = idLinha;
     tr.className = "animate__animated animate__fadeInDown";
     
+    let optionsCategoria = `<option value="" selected disabled>Selecione...</option>`;
+    categoriasDisponiveis.forEach(cat => { optionsCategoria += `<option value="${cat}">${cat}</option>`; });
+
     tr.innerHTML = `
         <td class="text-center fw-bold text-success index-item-almox" style="font-size: 0.9rem;">${contadorItensAlmox}</td>
+        <td><select class="form-select form-select-sm bg-light item-categoria" onchange="aoSelecionarCategoria(this)">${optionsCategoria}</select></td>
+        <td><input type="text" class="form-control form-control-sm bg-light text-muted item-codigo fw-bold" placeholder="Auto" readonly></td>
+        <td><select class="form-select form-select-sm bg-light item-desc text-dark text-truncate" style="max-width: 350px;" onchange="aoSelecionarMaterial(this)" disabled><option value="" selected disabled>Aguardando Categoria...</option></select></td>
         <td>
-            <input type="text" class="form-control form-control-sm border-0 bg-light rounded-3 item-desc" 
-                   maxlength="60" placeholder="Ex: Resma Papel A4" oninput="validarAlmoxarifado()">
-        </td>
-        <td>
-            <div class="d-flex align-items-center justify-content-center bg-light rounded-3 p-1 border">
-                <button type="button" class="btn btn-sm btn-link text-danger p-0 me-2" 
-                        onclick="ajustarQtdAlmox('${tr.id}', -1); validarAlmoxarifado();">
-                    <i class="fas fa-minus-circle"></i>
-                </button>
-                <input type="text" class="form-control form-control-sm border-0 bg-transparent text-center item-qtd" 
-                       style="width: 35px; font-weight: bold;" value="1"
-                       oninput="this.value=this.value.replace(/[^0-9]/g,''); validarAlmoxarifado();">
-                <button type="button" class="btn btn-sm btn-link text-success p-0 ms-2" 
-                        onclick="ajustarQtdAlmox('${tr.id}', 1); validarAlmoxarifado();">
-                    <i class="fas fa-plus-circle"></i>
-                </button>
+            <div class="d-flex align-items-center bg-light rounded-3 p-1 border">
+                <button type="button" class="btn btn-sm text-danger p-0 px-1" onclick="ajustarQtdAlmox('${idLinha}', -1)"><i class="fas fa-minus"></i></button>
+                <input type="number" class="form-control form-control-sm border-0 bg-transparent text-center p-0 item-qtd fw-bold" value="1" readonly>
+                <button type="button" class="btn btn-sm text-success p-0 px-1" onclick="ajustarQtdAlmox('${idLinha}', 1)"><i class="fas fa-plus"></i></button>
             </div>
         </td>
-        <td class="text-center">
-            <button type="button" class="btn btn-link text-danger btn-sm p-0" onclick="removerLinhaAlmox('${tr.id}')">
-                <i class="fas fa-trash-alt"></i>
-            </button>
-        </td>
+        <td class="text-center"><button type="button" class="btn btn-link text-danger btn-sm p-0" onclick="removerLinhaAlmox('${idLinha}')"><i class="fas fa-trash-alt"></i></button></td>
     `;
+    
     tbody.appendChild(tr);
     renumerarItensAlmox();
+    validarAlmoxarifado();
+
+    if ((qtdAtual + 1) >= LIMITE_MAXIMO_ITENS) {
+        if (btnAdd) {
+            btnAdd.disabled = true;
+            btnAdd.innerHTML = `<i class="fas fa-lock me-1"></i> Máximo Atingido`;
+            btnAdd.classList.replace('btn-outline-success', 'btn-secondary');
+        }
+        Swal.fire({ title: 'Limite Atingido!', html: `Você adicionou a <b>${LIMITE_MAXIMO_ITENS}ª linha</b> de materiais.`, icon: 'info' });
+    }
+}
+
+function aoSelecionarCategoria(selectCat) {
+    const linha = selectCat.closest('tr');
+    const inputCod = linha.querySelector('.item-codigo');
+    const selectDesc = linha.querySelector('.item-desc');
+    const categoriaSelecionada = selectCat.value;
+
+    inputCod.value = '';
+    selectDesc.innerHTML = '<option value="" selected disabled>Selecione o Material...</option>';
+
+    if (categoriaSelecionada) {
+        selectDesc.disabled = false;
+        const itensDaFamilia = catalogoMateriaisMemoria.filter(m => (m.categoria || 'Uso Geral') === categoriaSelecionada);
+        
+        itensDaFamilia.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = item.codigo; 
+            
+            if (item.quantidade_estoque <= 0) {
+                opt.text = `🚫 [ INDISPONÍVEL ] - ${item.descricao}`;
+                opt.disabled = true; 
+            } else {
+                opt.text = item.descricao; 
+            }
+            selectDesc.appendChild(opt);
+        });
+    } else {
+        selectDesc.disabled = true;
+    }
+    validarAlmoxarifado();
+}
+
+function aoSelecionarMaterial(selectDesc) {
+    const linhaAtual = selectDesc.closest('tr');
+    const inputCodAtual = linhaAtual.querySelector('.item-codigo');
+    const codigoSelecionado = selectDesc.value; 
+
+    const tbody = document.getElementById('tbody-almox');
+    let idLinhaDuplicada = null;
+
+    tbody.querySelectorAll('tr').forEach(linha => {
+        if (linha.id !== linhaAtual.id) {
+            const codOutraLinha = linha.querySelector('.item-codigo').value;
+            if (codOutraLinha === codigoSelecionado && codigoSelecionado !== "") idLinhaDuplicada = linha.id;
+        }
+    });
+
+    if (idLinhaDuplicada) {
+        const linhaAntiga = document.getElementById(idLinhaDuplicada);
+        const nomeMaterial = selectDesc.options[selectDesc.selectedIndex].text;
+
+        Swal.fire({
+            title: 'Material Duplicado!',
+            html: `O item <b>${nomeMaterial}</b> já consta em outra linha. Somar quantidade?`,
+            icon: 'question', showCancelButton: true, confirmButtonText: 'Sim', cancelButtonText: 'Não'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                ajustarQtdAlmox(idLinhaDuplicada, 1);
+                linhaAntiga.classList.add('animate__pulse', 'bg-success', 'bg-opacity-25');
+                setTimeout(() => linhaAntiga.classList.remove('animate__pulse', 'bg-success', 'bg-opacity-25'), 1500);
+            }
+            selectDesc.selectedIndex = 0;
+            inputCodAtual.value = '';
+            validarAlmoxarifado();
+        });
+        return; 
+    }
+    inputCodAtual.value = codigoSelecionado; 
     validarAlmoxarifado();
 }
 
 function ajustarQtdAlmox(idLinha, mudanca) {
     const linha = document.getElementById(idLinha);
-    if (!linha) return;
     const inputQtd = linha.querySelector('.item-qtd');
+    const inputCod = linha.querySelector('.item-codigo').value; 
     let valor = parseInt(inputQtd.value) || 0;
-    valor = Math.max(1, Math.min(99, valor + mudanca));
-    inputQtd.value = valor;
+    
+    let limiteMaximo = 99; 
+    let nomeMaterial = "este item";
+
+    if (inputCod) {
+        const itemNoCatalogo = catalogoMateriaisMemoria.find(m => m.codigo === inputCod);
+        if (itemNoCatalogo) {
+            limiteMaximo = itemNoCatalogo.quantidade_estoque;
+            nomeMaterial = itemNoCatalogo.descricao;
+        }
+    }
+
+    let novaQtd = valor + mudanca;
+    if (novaQtd < 1) novaQtd = 1;
+    
+    if (novaQtd > limiteMaximo) {
+        Swal.fire({ title: 'Limite de Estoque!', html: `Máximo disponível para <b>${nomeMaterial}</b> atingido.`, icon: 'warning' });
+        novaQtd = limiteMaximo; 
+    }
+
+    inputQtd.value = novaQtd;
+    validarAlmoxarifado();
 }
 
 function removerLinhaAlmox(idLinha) {
-    const linha = document.getElementById(idLinha);
-    if (linha) {
-        linha.classList.replace('animate__fadeInDown', 'animate__fadeOutRight'); 
-        setTimeout(() => {
-            linha.remove();
-            renumerarItensAlmox();
-            validarAlmoxarifado();
-        }, 300);
+    document.getElementById(idLinha).remove();
+    renumerarItensAlmox();
+    validarAlmoxarifado();
+
+    const tbody = document.getElementById('tbody-almox');
+    const btnAdd = document.getElementById('btn-almox-add');
+    if (tbody.querySelectorAll('tr').length < LIMITE_MAXIMO_ITENS && btnAdd) {
+        btnAdd.disabled = false;
+        btnAdd.innerHTML = '<i class="fas fa-plus me-1"></i> Adicionar Item';
+        btnAdd.classList.replace('btn-secondary', 'btn-outline-success');
     }
 }
 
 function renumerarItensAlmox() {
-    const linhas = document.querySelectorAll('#tbody-almox tr');
-    linhas.forEach((linha, index) => {
-        const idxEl = linha.querySelector('.index-item-almox');
-        if (idxEl) idxEl.innerText = index + 1;
+    document.querySelectorAll('#tbody-almox tr').forEach((linha, index) => {
+        linha.querySelector('.index-item-almox').innerText = index + 1;
     });
 }
 
 function validarAlmoxarifado() {
-    const footer = document.getElementById('container-footer-almox');
-    const status = document.getElementById('almox-status-footer');
-    const unidade = document.getElementById('almox-unidade').value.trim();
-    const linhas = document.querySelectorAll('#tbody-almox tr');
+    const unidade = document.getElementById('almox-unidade')?.value;
+    let totalValidos = 0, erroCampos = false;
 
-    let totalItensValidos = 0;
-    let erroDescricao = false;
-
-    linhas.forEach(linha => {
-        const desc = linha.querySelector('.item-desc').value.trim();
-        const qtd = parseInt(linha.querySelector('.item-qtd').value) || 0;
-
-        if (desc !== "") {
-            totalItensValidos++;
-        } else {
-            erroDescricao = true;
-        }
+    document.querySelectorAll('#tbody-almox tr').forEach(linha => {
+        const cat = linha.querySelector('.item-categoria').value;
+        const cod = linha.querySelector('.item-codigo').value;
+        const hasDesc = linha.querySelector('.item-desc').selectedIndex > 0; 
+        
+        if (cat !== "" && cod !== "" && hasDesc) totalValidos++;
+        else erroCampos = true;
     });
 
-    const temInteracao = unidade !== "" || totalItensValidos > 0;
-    footer.classList.toggle('d-none', !temInteracao);
+    const btn = document.getElementById('btn-almox-enviar');
+    const status = document.getElementById('almox-status-texto');
 
-    if (!unidade) {
-        status.value = "ERRO: Informe sua unidade de trabalho";
-        toggleBotoesAlmox(false);
-    } else if (totalItensValidos === 0) {
-        status.value = "ERRO: Adicione pelo menos 1 item";
-        toggleBotoesAlmox(false);
-    } else if (erroDescricao) {
-        status.value = "ERRO: Existem itens sem descrição";
-        toggleBotoesAlmox(false);
+    if (!btn || !status) return;
+
+    if (!unidade || unidade === "") {
+        status.textContent = "Selecione sua unidade no topo.";
+        status.className = "small fw-bold text-danger";
+        btn.classList.add('disabled'); btn.disabled = true;
+    } else if (totalValidos === 0 || erroCampos) {
+        status.textContent = "Selecione corretamente a Categoria e o Material.";
+        status.className = "small fw-bold text-danger";
+        btn.classList.add('disabled'); btn.disabled = true;
     } else {
-        const textoItens = totalItensValidos > 1 ? 'itens listados' : 'item listado';
-        status.value = `PRONTO: ${totalItensValidos} ${textoItens} para envio.`;
-        toggleBotoesAlmox(true);
+        status.textContent = `${totalValidos} item(ns) validado(s).`;
+        status.className = "small fw-bold text-success";
+        btn.classList.remove('disabled'); btn.disabled = false;
     }
 }
 
-function toggleBotoesAlmox(valido) {
-    const status = document.getElementById('almox-status-footer');
-    status.classList.toggle('text-danger', !valido);
-    status.classList.toggle('text-success', valido);
-    document.getElementById('btn-almox-enviar').classList.toggle('d-none', !valido);
-    document.getElementById('btn-almox-corrigir').classList.toggle('d-none', valido);
+async function enviarSolicitacaoAlmoxarifado() {
+    const dados = {
+        nome: document.getElementById('almox-nome').value,
+        email: document.getElementById('almox-email').value,
+        unidade: document.getElementById('almox-unidade').value,
+        itens: [] 
+    };
+
+    document.querySelectorAll('#tbody-almox tr').forEach(linha => {
+        const cat = linha.querySelector('.item-categoria').value;
+        const cod = linha.querySelector('.item-codigo').value;
+        const selectDesc = linha.querySelector('.item-desc');
+        const desc = selectDesc.options[selectDesc.selectedIndex]?.text || '';
+        const qtd = parseInt(linha.querySelector('.item-qtd').value) || 1;
+        
+        if (cat && cod && desc) dados.itens.push({ categoria: cat, codigo: cod, descricao: desc.substring(0, 200), quantidade: qtd });
+    });
+
+    const btn = document.getElementById('btn-almox-enviar');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando...';
+    btn.disabled = true;
+
+    try {
+        // CORREÇÃO CRÍTICA: Totalmente integrado ao nosso apiService
+        const data = await fetchPublico('/almoxarifado', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+
+        if (data.success) {
+            document.getElementById('conteudo-modal-base').innerHTML = `
+                <div class="modal-body text-center py-5 animate__animated animate__fadeIn">
+                    <i class="fas fa-box-open text-success mb-4" style="font-size: 5rem;"></i>
+                    <h4 class="fw-bold">Requisição Concluída!</h4>
+                    <div class="bg-light p-3 mx-auto rounded-4 border my-4" style="max-width: 300px;">
+                        <small class="text-muted fw-bold d-block">PROTOCOLO</small>
+                        <span class="fw-bold text-success" style="font-size: 1.5rem;">${data.protocolo}</span>
+                    </div>
+                    <button type="button" class="btn btn-success px-5 rounded-pill" data-bs-dismiss="modal">Finalizar</button>
+                </div>
+            `;
+        } else {
+            Swal.fire('Erro', 'Falha no banco: ' + data.message, 'error');
+            btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Enviar Requisição';
+            btn.disabled = false;
+        }
+    } catch (error) {
+        Swal.fire('Erro', 'Servidor inacessível.', 'error');
+        btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Enviar Requisição';
+        btn.disabled = false;
+    }
 }
 
-function limparFormularioAlmoxarifado() {
-    document.getElementById('almox-unidade').value = "";
-    document.getElementById('tbody-almox').innerHTML = "";
-    adicionarLinhaAlmox();
-    document.getElementById('container-footer-almox').classList.add('d-none');
-}
-
-function enviarSolicitacaoAlmoxarifado() {
-    // CHAMA O GERADOR CENTRALIZADO (Padrão: ALMOX-2026-000001)
-    const protocolo = GeradorProtocolo.gerar('ALMOXARIFADO');
-
-    // BUSCA O CONTAINER DO MODAL
-    const container = document.getElementById('content-modal-almoxarifado');
-    if (!container) return;
-
-    // RENDERIZA A TELA DE SUCESSO PADRONIZADA
-    container.innerHTML = `
-        <div class="modal-body text-center py-5 animate__animated animate__fadeIn">
-            <i class="fas fa-box-open text-success mb-4" style="font-size: 5rem;"></i>
-            
-            <h4 class="fw-bold text-dark">Requisição Concluída!</h4>
-            <p class="text-muted px-4 small">
-                Sua solicitação de materiais foi registrada e enviada para a equipe do Almoxarifado.
-            </p>
-            
-            <div class="bg-light mx-auto p-3 rounded-4 border shadow-sm mb-4" style="max-width: 300px;">
-                <small class="text-muted d-block fw-bold" style="letter-spacing: 1px; font-size: 0.7rem;">PROTOCOLO</small>
-                <span class="fw-bold text-success" style="font-size: 1.4rem;">${protocolo}</span>
-            </div>
-            
-            <button type="button" class="btn btn-success rounded-pill px-5 fw-bold shadow-sm" data-bs-dismiss="modal">
-                Finalizar
-            </button>
-        </div>
-    `;
-
-    // Log para fins de auditoria no console do desenvolvedor
-    console.log(`[ALMOXARIFADO] Requisição ${protocolo} processada.`);
-}
+// =========================================================================
+// EXPORTANDO AS FUNÇÕES PARA O HTML
+// =========================================================================
+window.iniciarFluxoAlmoxarifado = iniciarFluxoAlmoxarifado;
+window.montarModalAlmoxarifado = montarModalAlmoxarifado;
+window.carregarCatalogoAlmox = carregarCatalogoAlmox;
+window.adicionarLinhaAlmox = adicionarLinhaAlmox;
+window.aoSelecionarCategoria = aoSelecionarCategoria;
+window.aoSelecionarMaterial = aoSelecionarMaterial;
+window.ajustarQtdAlmox = ajustarQtdAlmox;
+window.removerLinhaAlmox = removerLinhaAlmox;
+window.validarAlmoxarifado = validarAlmoxarifado;
+window.enviarSolicitacaoAlmoxarifado = enviarSolicitacaoAlmoxarifado;

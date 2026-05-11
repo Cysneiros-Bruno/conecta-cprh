@@ -9,7 +9,7 @@ const menuDados = {
         descricao: "Sistemas hospedados fora ou na ATI, como e-mail, SEI, NPS, MDComune, etc",
         icon: "fas fa-network-wired",
         botoes: [
-            { label: "Acesso e-mail", img: "imagens/expresso-Logo.jpg", action: () => window.open('https://www.expresso.pe.gov.br/', '_blank') },
+            { label: "Acesso e-mail", img: "imagens/sogo-logo.png", action: () => window.open('https://sogo.pe.gov.br/SOGo/', '_blank') },
             { label: "Acesso SEI", img: "imagens/sei-ico2.PNG", action: () => window.open('https://sei.pe.gov.br/', '_blank') },
             { label: "Acesso NPS", img: "imagens/nps-logo.png", action: () => window.open('https://www.nps.pe.gov.br/', '_blank') },
             { label: "Avaliação de Desempenho", img: "imagens/desempenho.JPG", action: () => window.open('https://www.gestaododesempenho.pe.gov.br/', '_blank') },
@@ -21,51 +21,65 @@ const menuDados = {
         descricao: "Sistemas hospedados na CPRH, como SILIA, SISAM, Solicitação de Veículos, etc",
         icon: "fas fa-laptop-house",
         botoes: [
-            { label: "Acesso SILIA", img: "imagens/Silia-logo.PNG", action: () => window.open('https://silia.cprh.pe.gov.br:83', '_blank') },
-            { label: "Acesso SISAM", img: "imagens/sisam-logo.png", action: () => window.open('https://sistemas.cprh.pe.gov.br:8383/siliaweb/selis/', '_blank') },
-            { label: "Agenda Telefônica", icon: "fas fa-address-book", action: () => window.location.href='agenda.html' },
+            { 
+                label: "Acesso SILIA", 
+                img: "imagens/Silia-logo.PNG", 
+                action: () => window.open('https://silia.cprh.pe.gov.br:83', '_blank') 
+            },
+            { 
+                label: "Acesso SISAM", 
+                img: "imagens/sisam-logo.png", 
+                action: () => window.open('https://sistemas.cprh.pe.gov.br:8383/siliaweb/selis/', '_blank') 
+            },
+            { 
+                label: "Agenda Telefônica", 
+                icon: "fas fa-address-book", 
+                action: () => window.location.href='agenda.html' 
+            },
             { 
                 label: "Abertura Chamado T.I.", 
                 img: "imagens/whatsapp-logo.jpg", 
                 action: () => {
-                    console.log("Botão T.I. clicado!"); // Isso deve aparecer no F12
                     if (typeof montarModalTI === 'function') {
-                        console.log("Função montarModalTI encontrada, executando...");
                         montarModalTI();
-                    } else {
-                        console.error("A função montarModalTI NÃO EXISTE no carregamento.");
                     }
                 }
             },
             { 
+                label: "Painel CPRH", 
+                icon: "fas fa-chart-pie", 
+                action: () => window.open('https://sistemas.cprh.pe.gov.br:8383/dashboard_cprh/?year=2026', '_blank')
+            },
+            { 
                 label: "Solicitação de Veículos", 
                 icon: "fa-solid fa-car", 
-                // Passa pelo controle de acesso
-                action: () => solicitarAcesso('Veiculos') 
+                action: () => window.open('https://silia.cprh.pe.gov.br:83//silian/silia/silia.php?id_redir=2', '_blank')
             },
             { 
                 label: "Solicitação de Diárias", 
                 icon: "fa-solid fa-file-invoice-dollar", 
-                // Passa pelo controle de acesso
-                action: () => solicitarAcesso('Diarias') 
+                action: () => window.open('https://silia.cprh.pe.gov.br:83//silian/silia/silia.php?id_redir=1', '_blank')
             },
             { 
                 label: "Solicitação de Almoxarifado", 
                 icon: "fa-solid fa-dolly", 
-                // Agora passa pela portaria de acesso
                 action: () => solicitarAcesso('Almoxarifado') 
             },
             { 
                 label: "Controle de Patrimônio", 
                 icon: "fas fa-barcode", 
-                // Passa pelo controle de acesso
                 action: () => solicitarAcesso('Patrimonio') 
             },
             { 
                 label: "Abertura Chamado Manutenção", 
                 icon: "fa-solid fa-screwdriver-wrench", 
-                // Agora passa pela portaria de acesso
                 action: () => solicitarAcesso('Manutencao')
+            },
+            { 
+                label: "Solicitação Serviços Gerais", 
+                icon: "fas fa-broom", 
+                // CORREÇÃO: Apontando para o destino correto
+                action: () => solicitarAcesso('ServicosGerais')
             }    
         ]
     },
@@ -171,7 +185,7 @@ function renderizarCardsNivel1() {
     container.appendChild(secaoMaisAcessados);
 
     const atalhosContainer = document.getElementById('atalhos-mais-acessados');
-    const labelsDesejados = ["Acesso SILIA", "Acesso e-mail", "Acesso SEI", "Agenda Telefônica", "Abertura Chamado T.I."];
+    const labelsDesejados = ["Acesso SILIA", "Painel CPRH", "Acesso e-mail", "Acesso SEI", "Agenda Telefônica", "Abertura Chamado T.I."];
     
     let botoesParaRenderizar = [];
     Object.values(menuDados).forEach(cat => {
