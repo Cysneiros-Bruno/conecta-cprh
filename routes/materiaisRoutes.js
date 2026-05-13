@@ -39,13 +39,25 @@ router.post('/importar', verificarToken, async (req, res) => {
     if (!itens || itens.length === 0) return res.status(400).json({ success: false, message: 'Nenhum item enviado.' });
 
     try {
-        const valores = itens.map(item => [item.codigo, item.categoria, item.descricao, 1]);
+        // CORREÇÃO: Mapeamento agora inclui o Estoque e o Mínimo (com fallback para 0 caso não existam)
+        const valores = itens.map(item => [
+            item.codigo, 
+            item.categoria, 
+            item.descricao, 
+            1, // ativo
+            item.quantidade_estoque || 0, 
+            item.estoque_minimo || 0
+        ]);
+        
+        // CORREÇÃO: Inserção e Atualização agora cobrem as duas colunas numéricas
         const query = `
-            INSERT INTO catalogo_materiais (codigo, categoria, descricao, ativo) 
+            INSERT INTO catalogo_materiais (codigo, categoria, descricao, ativo, quantidade_estoque, estoque_minimo) 
             VALUES ? 
             ON DUPLICATE KEY UPDATE 
             categoria = VALUES(categoria),
             descricao = VALUES(descricao), 
+            quantidade_estoque = VALUES(quantidade_estoque),
+            estoque_minimo = VALUES(estoque_minimo),
             ativo = 1
         `;
         await pool.query(query, [valores]);
@@ -56,16 +68,34 @@ router.post('/importar', verificarToken, async (req, res) => {
     }
 });
 
-// 4. Editar Material
+// 4. Editar Material (Com suporte à troca/mesclagem de E-Fisco)
 router.put('/editar', verificarToken, async (req, res) => {
-    const { codigo, novaCategoria, novaDescricao, novoEstoque, novoMinimo, usuarioLogado } = req.body;
+    const { codigoAntigo, novoCodigo, novaCategoria, novaDescricao, novoEstoque, novoMinimo, usuarioLogado } = req.body;
+    
     try {
-        await pool.execute(
-            'UPDATE catalogo_materiais SET categoria = ?, descricao = ?, quantidade_estoque = ?, estoque_minimo = ? WHERE codigo = ?', 
-            [novaCategoria, novaDescricao, novoEstoque, novoMinimo, codigo]
-        );
-        await registrarLog(usuarioLogado, 'EDICAO', 'Catálogo', `Editou item ${codigo} (Estoque atualizado para: ${novoEstoque})`);
+        // REGRA DE NEGÓCIO: Se o almoxarife alterar o E-Fisco para um número que já existe,
+        // excluímos a "carcaça" do item antigo para transferir a alma e a história dele para o E-Fisco novo.
+        if (codigoAntigo !== novoCodigo) {
+            await pool.execute('DELETE FROM catalogo_materiais WHERE codigo = ?', [codigoAntigo]);
+        }
+        
+        // Faz o UPSERT poderoso: Se o E-Fisco novo já existir no banco, ele NÃO DA ERRO, 
+        // ele apenas atualiza os dados. Se for um E-fisco inédito, ele cria um novo.
+        const queryUpdate = `
+            INSERT INTO catalogo_materiais (codigo, categoria, descricao, ativo, quantidade_estoque, estoque_minimo) 
+            VALUES (?, ?, ?, 1, ?, ?) 
+            ON DUPLICATE KEY UPDATE 
+            categoria = VALUES(categoria), 
+            descricao = VALUES(descricao), 
+            quantidade_estoque = VALUES(quantidade_estoque), 
+            estoque_minimo = VALUES(estoque_minimo)
+        `;
+        
+        await pool.execute(queryUpdate, [novoCodigo, novaCategoria, novaDescricao, novoEstoque, novoMinimo]);
+        
+        await registrarLog(usuarioLogado, 'EDICAO', 'Catálogo', `Editou/Sobrescreveu o item. E-Fisco final: ${novoCodigo}`);
         res.json({ success: true });
+        
     } catch (error) { 
         res.status(500).json({ success: false, message: error.message }); 
     }

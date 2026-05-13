@@ -18,7 +18,9 @@ router.post('/', verificarToken, async (req, res) => {
     try {
         const escopo = modulo || 'TODOS';
         await pool.execute('INSERT INTO usuarios_admin (nome, login, senha, ativo, perm_visualizar, modulo_acesso) VALUES (?, ?, ?, 1, 1, ?)', [usuario, usuario, senha, escopo]);
-        await registrarLog(usuarioLogado, 'INCLUSAO', 'Acessos', `Criou gestor: ${usuario}`);
+        
+        await registrarLog(usuarioLogado, 'INCLUSAO', 'Acessos', `Criou o usuário: ${usuario}`);
+        
         res.json({ success: true });
     } catch (error) { res.status(500).json({ success: false, message: "Usuário já existe." }); }
 });
@@ -26,15 +28,13 @@ router.post('/', verificarToken, async (req, res) => {
 router.put('/modulo', verificarToken, async (req, res) => {
     const { id, novoModulo, usuarioLogado } = req.body;
     try {
-        // 1. Busca quem é o usuário que está sofrendo a alteração
+        // Busca o nome do usuário afetado para a auditoria
         const [user] = await pool.execute('SELECT login FROM usuarios_admin WHERE id = ?', [id]);
         const loginAfetado = user.length > 0 ? user[0].login : `ID ${id}`;
 
         await pool.execute('UPDATE usuarios_admin SET modulo_acesso = ? WHERE id = ?', [novoModulo, id]);
         
-        // 2. Registra de forma humana
         await registrarLog(usuarioLogado, 'EDICAO', 'Acessos', `Alterou o escopo do usuário [${loginAfetado}] para: ${novoModulo.toUpperCase()}`);
-        
         res.json({ success: true });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 });
@@ -42,27 +42,26 @@ router.put('/modulo', verificarToken, async (req, res) => {
 router.put('/permissao', verificarToken, async (req, res) => {
     const { idUsuario, colunaPermissao, valor, usuarioLogado } = req.body;
     try {
-        // 1. Busca quem é o usuário afetado
+        // Busca o nome do usuário afetado para a auditoria
         const [user] = await pool.execute('SELECT login FROM usuarios_admin WHERE id = ?', [idUsuario]);
         const loginAfetado = user.length > 0 ? user[0].login : `ID ${idUsuario}`;
 
-        // 2. Dicionário de tradução das colunas do banco para PT-BR
+        // Dicionário para deixar o log amigável
         const dicionarioPermissoes = {
-            'perm_visualizar': 'Visualizar Catálogos',
+            'perm_visualizar': 'Visualizar',
             'perm_cadastrar': 'Cadastrar Itens',
             'perm_editar': 'Editar Registros',
             'perm_excluir': 'Excluir Registros',
-            'perm_manutencao': 'Manutenção Avançada (Reset/Acessos)',
-            'ativo': 'Acesso Geral ao Painel'
+            'perm_manutencao': 'Manutenção Avançada',
+            'ativo': 'Acesso ao Sistema'
         };
 
         const nomePermissao = dicionarioPermissoes[colunaPermissao] || colunaPermissao;
         const acao = valor === 1 ? 'Concedeu' : 'Revogou';
 
-        // 3. Executa a atualização
         await pool.execute(`UPDATE usuarios_admin SET ${colunaPermissao} = ? WHERE id = ?`, [valor, idUsuario]);
         
-        // 4. Salva o log perfeitamente formatado
+        // Log formatado exatamente como solicitado
         await registrarLog(usuarioLogado, 'EDICAO', 'Acessos', `${acao} a permissão de [${nomePermissao}] para o usuário: ${loginAfetado}`);
         
         res.json({ success: true });
@@ -73,7 +72,10 @@ router.put('/renomear', verificarToken, async (req, res) => {
     const { id, novoNome, usuarioLogado } = req.body;
     try {
         await pool.execute('UPDATE usuarios_admin SET login = ?, nome = ? WHERE id = ?', [novoNome, novoNome, id]);
-        await registrarLog(usuarioLogado, 'EDICAO', 'Acessos', `Renomeou admin ID ${id}`);
+        
+        // Log formatado exatamente como solicitado
+        await registrarLog(usuarioLogado, 'EDICAO', 'Acessos', `Renomeou o usuário: ${novoNome}`);
+        
         res.json({ success: true });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 });
@@ -81,8 +83,14 @@ router.put('/renomear', verificarToken, async (req, res) => {
 router.put('/senha', verificarToken, async (req, res) => {
     const { id, novaSenha, usuarioLogado } = req.body;
     try {
+        // Busca o nome ANTES de alterar
+        const [user] = await pool.execute('SELECT login FROM usuarios_admin WHERE id = ?', [id]);
+        const loginAfetado = user.length > 0 ? user[0].login : `ID ${id}`;
+
         await pool.execute('UPDATE usuarios_admin SET senha = ? WHERE id = ?', [novaSenha, id]);
-        await registrarLog(usuarioLogado, 'EDICAO', 'Acessos', `Alterou senha ID ${id}`);
+        
+        await registrarLog(usuarioLogado, 'EDICAO', 'Acessos', `Alterou a senha do usuário: ${loginAfetado}`);
+        
         res.json({ success: true });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 });
@@ -91,8 +99,14 @@ router.delete('/:id', verificarToken, async (req, res) => {
     const { id } = req.params;
     const { usuarioLogado } = req.body;
     try {
+        // Busca o nome ANTES de excluir (pois depois de dar o DELETE, a informação some)
+        const [user] = await pool.execute('SELECT login FROM usuarios_admin WHERE id = ?', [id]);
+        const loginAfetado = user.length > 0 ? user[0].login : `ID ${id}`;
+
         await pool.execute('DELETE FROM usuarios_admin WHERE id = ?', [id]);
-        await registrarLog(usuarioLogado, 'EXCLUSAO', 'Acessos', `Excluiu admin ID ${id}`);
+        
+        await registrarLog(usuarioLogado, 'EXCLUSAO', 'Acessos', `Excluiu o usuário: ${loginAfetado}`);
+        
         res.json({ success: true });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 });

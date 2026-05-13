@@ -30,70 +30,131 @@ router.get('/itens', verificarToken, async (req, res) => {
     }
 });
 
+// IMPORTAÇÃO EM LOTE - Motor Analítico Flexível (Tolerante a Falhas de Setor)
 router.post('/catalogo/importar', verificarToken, async (req, res) => {
     const { itens, usuarioLogado } = req.body;
     if (!itens || itens.length === 0) return res.status(400).json({ success: false, message: 'Nenhum item enviado.' });
 
-    try {
-        const valores = itens.map(item => [
-            item.tombamento, item.descricao, item.setor || null, item.estado || 'Em bom estado', 1
-        ]);
+    const connection = await pool.getConnection();
+    let cadastrados = 0;
+    let ignorados = 0;
+    let avisos = []; // Nova lista para guardar itens salvos com setor em branco
 
-        const query = `
-            INSERT INTO catalogo_patrimonio (tombamento, descricao, setor_atual, estado_conservacao, ativo) 
-            VALUES ? 
-            ON DUPLICATE KEY UPDATE 
-            descricao = VALUES(descricao), setor_atual = VALUES(setor_atual), estado_conservacao = VALUES(estado_conservacao), ativo = 1
-        `;
+    try {
+        await connection.beginTransaction();
+
+        for (let item of itens) {
+            const t = String(item.tombamento).trim().toUpperCase();
+            const d = String(item.descricao).trim().toUpperCase();
+            const s = String(item.setor || '').trim().toUpperCase();
+            const e = String(item.estado || 'NOVO').trim().toUpperCase();
+
+            // 1. Verifica se o tombamento já existe no banco (Isso continua sendo impeditivo)
+            const [existe] = await connection.execute('SELECT tombamento FROM catalogo_patrimonio WHERE tombamento = ?', [t]);
+            if (existe.length > 0) {
+                ignorados++;
+                continue; 
+            }
+
+            // 2. Verifica o SETOR (Nova Lógica Tolerante)
+            let setorFinal = null;
+            if (s && s !== 'NÃO ALOCADO' && s !== '') {
+                const [setorExiste] = await connection.execute('SELECT nome FROM setores WHERE UPPER(nome) = ?', [s]);
+                
+                if (setorExiste.length === 0) {
+                    // O setor digitado no CSV não existe! 
+                    // Salva nos avisos, deixa setorFinal nulo e DEIXA SEGUIR PARA O INSERT.
+                    avisos.push(`Bem <b>${t}</b>: Setor "${s}" desconhecido. Salvo como "Não alocado".`);
+                    setorFinal = null;
+                } else {
+                    setorFinal = setorExiste[0].nome; // Pega o nome correto do banco
+                }
+            }
+
+            // 3. Insere de forma segura (Mesmo com setorFinal nulo, o banco aceita pela Foreign Key ON DELETE SET NULL)
+            await connection.execute(
+                'INSERT INTO catalogo_patrimonio (tombamento, descricao, setor_atual, estado_conservacao, ativo) VALUES (?, ?, ?, ?, 1)',
+                [t, d, setorFinal, e]
+            );
+            cadastrados++;
+        }
+
+        await connection.commit();
         
-        await pool.query(query, [valores]);
-        await registrarLog(usuarioLogado, 'INCLUSAO', 'Patrimônio', `Importou/Atualizou ${itens.length} bem(ns) tombado(s) em lote.`);
-        res.json({ success: true });
-    } catch (error) { res.status(500).json({ success: false, message: error.message }); }
+        if (cadastrados > 0) {
+            await registrarLog(usuarioLogado, 'INCLUSAO', 'Patrimônio', `Importou/Cadastrou ${cadastrados} bem(ns) em lote. (${avisos.length} alertas de setor)`);
+        }
+        
+        res.json({ success: true, cadastrados, ignorados, avisos });
+
+    } catch (error) { 
+        await connection.rollback();
+        res.status(500).json({ success: false, message: error.message }); 
+    } finally {
+        connection.release();
+    }
 });
 
+// NOVO BEM MANUAL
 router.post('/catalogo/novo', verificarToken, async (req, res) => {
     const { tombamento, descricao, setor, estado, usuarioLogado } = req.body;
     try {
-        const [existe] = await pool.execute('SELECT tombamento FROM catalogo_patrimonio WHERE tombamento = ?', [tombamento]);
-        if (existe.length > 0) return res.status(400).json({ success: false, message: 'Tombamento já cadastrado.' });
+        const t = String(tombamento).trim().toUpperCase();
+        const d = String(descricao).trim().toUpperCase();
+        const s = String(setor || '').trim().toUpperCase();
+        const e = String(estado || 'NOVO').trim().toUpperCase();
+
+        const [existe] = await pool.execute('SELECT tombamento FROM catalogo_patrimonio WHERE tombamento = ?', [t]);
+        if (existe.length > 0) return res.status(400).json({ success: false, message: 'Tombamento já cadastrado no sistema.' });
+
+        const setorFinal = (s === '' || s === 'NÃO ALOCADO') ? null : s;
 
         await pool.execute(
             'INSERT INTO catalogo_patrimonio (tombamento, descricao, setor_atual, estado_conservacao, ativo) VALUES (?, ?, ?, ?, 1)',
-            [tombamento, descricao, setor, estado]
+            [t, d, setorFinal, e]
         );
-        const detalheLog = `Cadastrou o bem [${tombamento}] - ${descricao} | Local inicial: ${setor || 'Depósito'} | Estado: ${estado}`;
+        const detalheLog = `Cadastrou o bem [${t}] - ${d} | Local: ${setorFinal || 'Não Alocado'} | Estado: ${e}`;
         await registrarLog(usuarioLogado, 'CADASTRO', 'Patrimônio', detalheLog);
         res.json({ success: true });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 });
 
+// EDIÇÃO DE BEM
 router.put('/catalogo/editar', verificarToken, async (req, res) => {
-    const { tombamento, descricao, setor, estado, usuarioLogado } = req.body;
+    const { tombamentoAntigo, novoTombamento, descricao, setor, estado, usuarioLogado } = req.body;
     try {
-        const [rows] = await pool.execute('SELECT descricao, setor_atual, estado_conservacao FROM catalogo_patrimonio WHERE tombamento = ?', [tombamento]);
+        const tAntigo = String(tombamentoAntigo).trim().toUpperCase();
+        const tNovo = String(novoTombamento).trim().toUpperCase();
+        const d = String(descricao).trim().toUpperCase();
+        const s = String(setor || '').trim().toUpperCase();
+        const e = String(estado || 'NOVO').trim().toUpperCase();
+
+        if (tNovo !== tAntigo) {
+            const [existe] = await pool.execute('SELECT tombamento FROM catalogo_patrimonio WHERE tombamento = ?', [tNovo]);
+            if (existe.length > 0) return res.status(400).json({ success: false, message: 'O novo tombamento digitado já se encontra cadastrado no sistema.' });
+        }
+
+        const [rows] = await pool.execute('SELECT tombamento, descricao, setor_atual, estado_conservacao FROM catalogo_patrimonio WHERE tombamento = ?', [tAntigo]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Bem não encontrado.' });
 
         const atual = rows[0];
         let mudancas = [];
+        const setorFinal = (s === '' || s === 'NÃO ALOCADO') ? null : s;
 
-        if (atual.descricao !== descricao) mudancas.push(`Descrição: "${atual.descricao}" -> "${descricao}"`);
-        
-        const setorAntigo = atual.setor_atual || 'Não Alocado';
-        const setorNovo = setor || 'Não Alocado';
-        if (setorAntigo !== setorNovo) mudancas.push(`Setor: "${setorAntigo}" -> "${setorNovo}"`);
-
-        if (atual.estado_conservacao !== estado) mudancas.push(`Estado: "${atual.estado_conservacao}" -> "${estado}"`);
+        if (tNovo !== tAntigo) mudancas.push(`Tombamento: "${tAntigo}" -> "${tNovo}"`);
+        if (atual.descricao !== d) mudancas.push(`Desc: "${atual.descricao}" -> "${d}"`);
+        if ((atual.setor_atual || 'NÃO ALOCADO') !== (setorFinal || 'NÃO ALOCADO')) mudancas.push(`Setor: "${atual.setor_atual || 'NÃO ALOCADO'}" -> "${setorFinal || 'NÃO ALOCADO'}"`);
+        if (atual.estado_conservacao !== e) mudancas.push(`Estado: "${atual.estado_conservacao}" -> "${e}"`);
 
         await pool.execute(
-            'UPDATE catalogo_patrimonio SET descricao = ?, setor_atual = ?, estado_conservacao = ? WHERE tombamento = ?',
-            [descricao, setor, estado, tombamento]
+            'UPDATE catalogo_patrimonio SET tombamento = ?, descricao = ?, setor_atual = ?, estado_conservacao = ? WHERE tombamento = ?',
+            [tNovo, d, setorFinal, e, tAntigo]
         );
 
         if (mudancas.length > 0) {
-            await registrarLog(usuarioLogado, 'EDICAO', 'Patrimônio', `Editou o bem [${tombamento}]. Alterações: ${mudancas.join(' | ')}`);
+            await registrarLog(usuarioLogado, 'EDICAO', 'Patrimônio', `Editou o bem [${tAntigo}]. Alterações: ${mudancas.join(' | ')}`);
         } else {
-            await registrarLog(usuarioLogado, 'EDICAO', 'Patrimônio', `Salvou o bem [${tombamento}] sem realizar alterações.`);
+            await registrarLog(usuarioLogado, 'EDICAO', 'Patrimônio', `Acessou e salvou o bem [${tAntigo}] sem realizar alterações.`);
         }
         res.json({ success: true });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
@@ -116,7 +177,7 @@ router.delete('/catalogo/:tombamento', verificarToken, async (req, res) => {
         await pool.execute('DELETE FROM catalogo_patrimonio WHERE tombamento = ?', [tombamento]);
         await registrarLog(usuarioLogado, 'EXCLUSAO', 'Patrimônio', `Excluiu o bem [${tombamento}]`);
         res.json({ success: true });
-    } catch (error) { res.status(500).json({ success: false, message: 'Item com histórico. Utilize o botão de Status para Inativá-lo.' }); }
+    } catch (error) { res.status(500).json({ success: false, message: 'Item com histórico de movimentação não pode ser excluído. Utilize o botão de Status para inativá-lo e tirá-lo da visão principal.' }); }
 });
 
 module.exports = router;

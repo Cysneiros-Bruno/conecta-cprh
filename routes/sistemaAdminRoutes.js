@@ -79,7 +79,7 @@ router.get('/relatorios/estatisticas', verificarToken, async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, message: 'Erro interno.' }); }
 });
 
-// 3. Alteração de Status e Baixa de Estoque
+// 3. Alteração de Status, Baixa de Estoque e Movimentação de Patrimônio
 router.put('/relatorios/status', verificarToken, async (req, res) => {
     const { protocolo, novoStatus, modulo, usuarioLogado } = req.body;
     const tabela = obterTabelaPorModulo(modulo);
@@ -97,6 +97,9 @@ router.put('/relatorios/status', verificarToken, async (req, res) => {
         const statusAntigo = chamadoExistente[0].status;
         const idChamado = chamadoExistente[0].id;
 
+        // ========================================================
+        // REGRA 1: ALMOXARIFADO (Baixa e Estorno de Estoque)
+        // ========================================================
         if (modulo === 'almoxarifado') {
             const eraFechado = statusAntigo === 'Solucionado' || statusAntigo === 'Fechado';
             const vaiFechar = novoStatus === 'Solucionado' || novoStatus === 'Fechado';
@@ -112,8 +115,8 @@ router.put('/relatorios/status', verificarToken, async (req, res) => {
 
                 for (let item of itens) {
                     await connection.execute('UPDATE catalogo_materiais SET quantidade_estoque = quantidade_estoque - ? WHERE codigo = ?', [item.quantidade, item.codigo]);
-                    const [res] = await connection.execute('SELECT codigo, descricao, quantidade_estoque, estoque_minimo FROM catalogo_materiais WHERE codigo = ?', [item.codigo]);
-                    if (res[0].quantidade_estoque <= res[0].estoque_minimo) dispararEmailAlertaEstoque(res[0]); 
+                    const [resQuery] = await connection.execute('SELECT codigo, descricao, quantidade_estoque, estoque_minimo FROM catalogo_materiais WHERE codigo = ?', [item.codigo]);
+                    if (resQuery[0].quantidade_estoque <= resQuery[0].estoque_minimo) dispararEmailAlertaEstoque(resQuery[0]); 
                 }
                 
                 await registrarLog(usuarioLogado || 'Sistema', 'SISTEMA', 'Estoque', `Baixa processada: ${protocolo}`);
@@ -126,7 +129,44 @@ router.put('/relatorios/status', verificarToken, async (req, res) => {
                 await registrarLog(usuarioLogado || 'Sistema', 'SISTEMA', 'Estoque', `Estorno processado. Protocolo ${protocolo} reaberto.`);
             }
         }
+        
+        // ========================================================
+        // REGRA 2: PATRIMÔNIO (Transferência e Estorno de Local)
+        // ========================================================
+        else if (modulo === 'patrimonio') {
+            const eraFechado = statusAntigo === 'Solucionado' || statusAntigo === 'Fechado';
+            const vaiFechar = novoStatus === 'Solucionado' || novoStatus === 'Fechado';
 
+            if (!eraFechado && vaiFechar) {
+                // Ao solucionar, busca o setor de destino e transfere os bens
+                const [chamadoPatri] = await connection.execute('SELECT destino FROM chamados_patrimonio WHERE id = ?', [idChamado]);
+                const setorDestino = chamadoPatri[0].destino || 'Não Alocado'; // Trata caso seja nulo
+
+                const [itens] = await connection.execute('SELECT tombamento FROM itens_patrimonio WHERE id_chamado = ?', [idChamado]);
+
+                for (let item of itens) {
+                    // O uso de TRIM() garante que se existir um "espaço invisível" no número, ele atualiza igual.
+                    await connection.execute('UPDATE catalogo_patrimonio SET setor_atual = ? WHERE TRIM(tombamento) = TRIM(?)', [setorDestino, item.tombamento]);
+                }
+                
+                await registrarLog(usuarioLogado || 'Sistema', 'SISTEMA', 'Patrimônio', `Transferência processada: Bens movidos para [${setorDestino}]. Protocolo: ${protocolo}`);
+            }
+            else if (eraFechado && !vaiFechar) {
+                // Caso seja reaberto, reverte o bem para o setor de origem
+                const [chamadoPatri] = await connection.execute('SELECT origem FROM chamados_patrimonio WHERE id = ?', [idChamado]);
+                const setorOrigem = chamadoPatri[0].origem || 'Não Alocado';
+
+                const [itens] = await connection.execute('SELECT tombamento FROM itens_patrimonio WHERE id_chamado = ?', [idChamado]);
+
+                for (let item of itens) {
+                    await connection.execute('UPDATE catalogo_patrimonio SET setor_atual = ? WHERE TRIM(tombamento) = TRIM(?)', [setorOrigem, item.tombamento]);
+                }
+                
+                await registrarLog(usuarioLogado || 'Sistema', 'SISTEMA', 'Patrimônio', `Estorno processado: Protocolo ${protocolo} reaberto. Bens retornados para [${setorOrigem}].`);
+            }
+        }
+
+        // Atualiza o status do chamado em si na tabela correspondente
         await connection.execute(`UPDATE ${tabela} SET status = ? WHERE protocolo = ?`, [novoStatus, protocolo]);
         await connection.commit();
         await registrarLog(usuarioLogado, 'EDICAO', modulo.toUpperCase(), `Alterou status do protocolo ${protocolo} para: ${novoStatus}`);
